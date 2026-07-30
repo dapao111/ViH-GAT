@@ -1,0 +1,29 @@
+seed: 42
+device: auto
+
+data:
+  interaction_csv: data/interactions.csv
+  fasta_path: data/virus_sequences.fasta
+  similarity_csv: data/host_similarity.csv
+  train_fraction: 0.8
+  negative_fraction: 0.1
+
+model:
+  pretrained_model: pretrained/lucavirus
+  checkpoint: checkpoints/best_model.pt
+  embed_dim: 256
+  num_heads: 2
+  dropout: 0.3
+
+sequence:
+  max_length: 512
+  num_fragments: 10
+
+training:
+  batch_size: 1
+  epochs: 100
+  learning_rate: 1.0e-3
+  weight_decay: 1.0e-4
+  sample_weight_clip: 5.0
+  early_stopping_patience: 4
+  history_path: outputs/training_history.json

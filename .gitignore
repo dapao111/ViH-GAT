@@ -1,0 +1,17 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+pretrained/*
+!pretrained/README.md
+checkpoints/*
+!checkpoints/README.md
+outputs/*
+!outputs/README.md
