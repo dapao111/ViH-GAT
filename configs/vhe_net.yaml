@@ -17,10 +17,10 @@ model:
 
 sequence:
   max_length: 512
-  num_fragments: 10
+  num_fragments: 5
 
 training:
-  batch_size: 1
+  batch_size: 128
   epochs: 100
   learning_rate: 1.0e-3
   weight_decay: 1.0e-4

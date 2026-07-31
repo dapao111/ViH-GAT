@@ -163,9 +163,9 @@ def make_train_validation_split(
 
 
 class FragmentTokenizer:
-    """Fixed 10-fragment, 512-token preprocessing for the selected model."""
+    """Fixed 5-fragment, 512-token preprocessing for the selected model."""
 
-    def __init__(self, tokenizer, *, max_length: int = 512, num_fragments: int = 10):
+    def __init__(self, tokenizer, *, max_length: int = 512, num_fragments: int = 5):
         if max_length < 4:
             raise ValueError("max_length must be at least 4.")
         if num_fragments < 1:

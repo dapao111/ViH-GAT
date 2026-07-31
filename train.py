@@ -69,6 +69,22 @@ def evaluate(
     return metrics(np.asarray(labels), np.asarray(probabilities))
 
 
+def normalized_sample_weights(
+    sample_weights: torch.Tensor,
+    *,
+    reference_mean: float,
+    clip: float,
+) -> torch.Tensor:
+    """Sanitize and normalize weights against the fixed training-set mean."""
+    sanitized = torch.nan_to_num(
+        sample_weights,
+        nan=1.0,
+        posinf=1.0,
+        neginf=0.0,
+    ).clamp_min(0.0)
+    return (sanitized / max(float(reference_mean), 1e-6)).clamp(max=float(clip))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train the single VHE-Net model.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -178,13 +194,29 @@ def main() -> None:
     output_history.parent.mkdir(parents=True, exist_ok=True)
     patience = int(training_config["early_stopping_patience"])
     weight_clip = float(training_config["sample_weight_clip"])
+    training_weights = torch.as_tensor(
+        train_frame["Weight"].to_numpy(dtype=np.float32), dtype=torch.float32
+    )
+    training_weight_mean = float(
+        torch.nan_to_num(
+            training_weights,
+            nan=1.0,
+            posinf=1.0,
+            neginf=0.0,
+        )
+        .clamp_min(0.0)
+        .mean()
+        .clamp_min(1e-6)
+        .item()
+    )
     best_auc = float("-inf")
     stale_epochs = 0
     history: list[dict] = []
 
     print(
         f"Training rows: {len(train_frame):,}; validation rows: "
-        f"{len(validation_frame):,}; device: {device}"
+        f"{len(validation_frame):,}; device: {device}; "
+        f"training-weight mean: {training_weight_mean:.6f}"
     )
     for epoch in range(1, epochs + 1):
         model.train()
@@ -196,15 +228,11 @@ def main() -> None:
                 attention_mask=batch["attention_mask"].to(device),
             )
             labels = batch["label"].to(device).view(-1, 1)
-            sample_weights = batch["weight"].to(device).view(-1, 1)
-            sample_weights = torch.nan_to_num(
-                sample_weights,
-                nan=1.0,
-                posinf=1.0,
-                neginf=0.0,
-            ).clamp_min(0.0)
-            sample_weights = sample_weights / sample_weights.mean().clamp_min(1e-6)
-            sample_weights = sample_weights.clamp(max=weight_clip)
+            sample_weights = normalized_sample_weights(
+                batch["weight"].to(device).view(-1, 1),
+                reference_mean=training_weight_mean,
+                clip=weight_clip,
+            )
 
             loss = (criterion(logits, labels) * sample_weights).mean()
             optimizer.zero_grad(set_to_none=True)
@@ -232,6 +260,10 @@ def main() -> None:
                     "epoch": epoch,
                     "validation_metrics": validation_metrics,
                     "seed": seed,
+                    "batch_size": batch_size,
+                    "positive_class_weight": float(positive_weight.item()),
+                    "sample_weight_reference_mean": training_weight_mean,
+                    "sample_weight_clip": weight_clip,
                 },
             )
             print(f"Saved best checkpoint: {output_checkpoint}")

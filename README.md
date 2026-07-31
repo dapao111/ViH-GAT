@@ -66,7 +66,8 @@ python train.py
 
 Training uses the fixed configuration in `configs/vhe_net.yaml`: seed 42, a
 stratified 80/20 split after retaining all positives and 10% of candidate
-negatives, 10 sequence fragments of 512 tokens, sample weighting, and
+negatives, 5 sequence fragments of 512 tokens, batch size 128, sample
+weighting normalized by the fixed training-set mean (then capped at 5), and
 validation ROC AUC for checkpoint selection.
 
 The saved file contains only the VHE-Net prediction head and host-similarity

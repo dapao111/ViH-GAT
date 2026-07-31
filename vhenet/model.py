@@ -200,6 +200,7 @@ class VHEModel(nn.Module):
         self,
         virus_features: torch.Tensor,
         host_ids: torch.Tensor,
+        fragment_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if host_ids.ndim == 0:
             host_ids = host_ids.reshape(1)
@@ -215,6 +216,33 @@ class VHEModel(nn.Module):
                 f"got {virus_features.size(0)}."
             )
 
+        num_fragments = virus_features.size(1)
+        if fragment_mask is None:
+            valid_fragments = torch.ones(
+                batch_size,
+                num_fragments,
+                dtype=torch.bool,
+                device=virus_features.device,
+            )
+        else:
+            if fragment_mask.ndim != 2 or fragment_mask.size(1) != num_fragments:
+                raise ValueError(
+                    "fragment_mask must have shape (batch_size, num_fragments)."
+                )
+            valid_fragments = fragment_mask.to(
+                device=virus_features.device,
+                dtype=torch.bool,
+            )
+            if valid_fragments.size(0) == 1 and batch_size > 1:
+                valid_fragments = valid_fragments.expand(batch_size, -1)
+            elif valid_fragments.size(0) != batch_size:
+                raise ValueError(
+                    f"fragment_mask batch size must be 1 or {batch_size}; "
+                    f"got {valid_fragments.size(0)}."
+                )
+        if not valid_fragments.any(dim=1).all():
+            raise ValueError("Each virus must contain at least one valid fragment.")
+
         host_embedding = self.host_embedding(host_ids)
         host_representation = self.host_transformer(host_embedding)
         similarity_features = self.sim_projector(self.sim_matrix[host_ids])
@@ -229,6 +257,7 @@ class VHEModel(nn.Module):
             query=query,
             key=key,
             value=value,
+            key_padding_mask=~valid_fragments,
             need_weights=False,
         )
         attention_output = attention_output.squeeze(1)
@@ -237,7 +266,9 @@ class VHEModel(nn.Module):
         )
         attention_output = self.ln_cross_attn(attention_output)
 
-        global_virus_feature = virus_features.mean(dim=1)
+        valid_weights = valid_fragments.unsqueeze(-1).to(virus_features.dtype)
+        global_virus_feature = (virus_features * valid_weights).sum(dim=1)
+        global_virus_feature = global_virus_feature / valid_weights.sum(dim=1)
         interaction = host_representation * attention_output
         combined = torch.cat(
             [
@@ -257,4 +288,5 @@ class VHEModel(nn.Module):
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         virus_features = self.encode_virus(input_ids, attention_mask)
-        return self.score_encoded(virus_features, host_ids)
+        fragment_mask = attention_mask.any(dim=-1) if attention_mask is not None else None
+        return self.score_encoded(virus_features, host_ids, fragment_mask)

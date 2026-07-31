@@ -226,7 +226,13 @@ class Predictor:
                         device=self.device,
                     )
                     probabilities = torch.sigmoid(
-                        self.model.score_encoded(virus_features, host_ids)
+                        self.model.score_encoded(
+                            virus_features,
+                            host_ids,
+                            fragment_mask=attention_mask.any(dim=-1).unsqueeze(0).to(
+                                self.device
+                            ),
+                        )
                     ).view(-1)
                     for host, probability in zip(
                         names,

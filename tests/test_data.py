@@ -21,6 +21,9 @@ class FakeTokenizer:
 
 
 class DataTests(unittest.TestCase):
+    def test_default_fragment_count(self):
+        self.assertEqual(FragmentTokenizer(FakeTokenizer()).num_fragments, 5)
+
     def test_fasta_text(self):
         records = parse_fasta_text(">virus_a\nAC GT\n>virus_b\nA-C.*T")
         self.assertEqual(records, {"virus_a": "ACGT", "virus_b": "ACT"})
